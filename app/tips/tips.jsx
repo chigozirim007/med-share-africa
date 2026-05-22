@@ -38,7 +38,7 @@ const MedicalResources = ({session}) => {
 
     useEffect(()=>{
         handleFetch()
-    }, [initialTips])
+    }, [])
 
 
     // const [tips, setTips] = useState(initialTips);
@@ -49,11 +49,11 @@ const MedicalResources = ({session}) => {
         try {
             if (confirm("Are you sure you want to delete this tip?")) {
                 await deleteDoc(doc(db, "health-tips", id));
+                setInitialTips(prev => prev.filter(tip => tip.postId !== id));
             }
         } catch (error) {
             console.error("An error occurred", error)
             alert("Oops Something went wrong")
-       
         }
     };
 
@@ -111,16 +111,18 @@ const MedicalResources = ({session}) => {
 
                                 {/* Content Snippet */}
                                 <div className="mb-6">
-                                    <p className="text-slate-600 line-clamp-2 leading-relaxed">
+                                    <p className="text-slate-600 line-clamp-4 leading-relaxed">
                                         {tip.desc}
                                     </p>
-                                    <Link
-                                        href={`/resources/${tip.id}`}
-                                        className="text-sm font-bold mt-2 inline-block hover:opacity-70 transition-opacity"
-                                        style={{ color: Theme.primaryGreen }}
-                                    >
-                                        Read more →
-                                    </Link>
+                                    {tip.desc && (tip.desc.split('\n').length > 4 || tip.desc.length > 250) && (
+                                        <Link
+                                            href={`/tips/${tip.postId}`}
+                                            className="text-sm font-bold mt-2 inline-block hover:opacity-70 transition-opacity"
+                                            style={{ color: Theme.primaryGreen }}
+                                        >
+                                            Read more →
+                                        </Link>
+                                    )}
                                 </div>
 
                                 {/* Preventive Advice Box */}
