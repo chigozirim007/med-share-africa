@@ -24,7 +24,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${inter.variable} ${playFair.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col font-sans text-slate-100 bg-[#0A0F1C] selection:bg-cyan-500 selection:text-[#0A0F1C]">
+      <body className="min-h-full flex flex-col font-sans text-slate-100 bg-[#050505] selection:bg-amber-500 selection:text-[#050505]">
         <Provider>
           <Navbar />
           {children}
