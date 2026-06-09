@@ -1,8 +1,31 @@
 @import "tailwindcss";
 
 :root {
-  --background: #050505;
-  --foreground: #F8FAFC;
+  /* ====== DESIGN TOKENS ====== */
+  /* Background hierarchy */
+  --color-base: #050505;          /* Page / obsidian black */
+  --color-surface: #0A0A0A;       /* Card surface */
+  --color-surface-2: #111111;     /* Elevated card surface */
+
+  /* Brand palette */
+  --color-emerald: #059669;       /* Primary emerald */
+  --color-emerald-dark: #065f46;  /* Deep jade */
+  --color-gold: #D4AF37;          /* Champagne gold */
+  --color-gold-light: #FDE047;    /* Bright gold */
+  --color-pearl: #F8FAFC;         /* Pearl white */
+
+  /* Semantic */
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --color-success: #10b981;
+
+  /* Glass border */
+  --glass-border: rgba(212, 175, 55, 0.15);
+  --glass-bg: rgba(255, 255, 255, 0.02);
+
+  /* Legacy aliases for body/foreground */
+  --background: var(--color-base);
+  --foreground: var(--color-pearl);
 }
 
 @theme inline {

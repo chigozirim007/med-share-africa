@@ -18,7 +18,18 @@ const inter = Inter({
 
 export const metadata = {
   title: "Med-Share Africa | Premium Health Intelligence",
-  description: "A luxury platform for verified medical resources and expert networking.",
+  description: "The premier platform for verified medical resources, clinical intelligence, and expert healthcare networking across Africa.",
+  icons: {
+    icon: "/favicon.png",
+    apple: "/favicon.png",
+  },
+  keywords: ["medical", "healthcare", "Africa", "clinical", "doctors", "health tips", "medical intelligence"],
+  authors: [{ name: "Med-Share Africa" }],
+  openGraph: {
+    title: "Med-Share Africa | Premium Health Intelligence",
+    description: "The premier destination for elite African healthcare professionals.",
+    type: "website",
+  },
 };
 
 export default function RootLayout({ children }) {

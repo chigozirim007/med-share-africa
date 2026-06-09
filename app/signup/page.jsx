@@ -3,8 +3,9 @@ import React, { useState } from "react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { db } from "@/config/firebase";
-import { collection, addDoc, query, where, getDocs } from "firebase/firestore";
-import { FiLoader, FiCheck, FiAlertTriangle, FiUser, FiMail, FiPhone, FiMapPin, FiBriefcase, FiChevronRight, FiChevronLeft } from "react-icons/fi";
+import { collection, addDoc, query, where, getDocs, doc, setDoc } from "firebase/firestore";
+import bcrypt from "bcryptjs";
+import { FiLoader, FiCheck, FiAlertTriangle, FiUser, FiMail, FiPhone, FiMapPin, FiBriefcase, FiChevronRight, FiChevronLeft, FiLock, FiEye, FiEyeOff } from "react-icons/fi";
 
 const SPECIALTIES = [
     "Cardiology", "Neurology", "Dermatology", "Pediatrics", "Oncology",
@@ -29,6 +30,8 @@ const STEPS = [
 const INITIAL_FORM = {
     fullName: "",
     email: "",
+    password: "",
+    confirmPassword: "",
     phone: "",
     country: "",
     city: "",
@@ -55,6 +58,8 @@ const ROLES = [
 ];
 
 export default function SignUpPage() {
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [step, setStep] = useState(0);
     const [form, setForm] = useState(INITIAL_FORM);
     const [errors, setErrors] = useState({});
@@ -73,6 +78,9 @@ export default function SignUpPage() {
         if (step === 0) {
             if (!form.fullName.trim() || form.fullName.trim().length < 3) newErrors.fullName = "Full name must be at least 3 characters.";
             if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) newErrors.email = "A valid email address is required.";
+            if (!form.password || form.password.length < 8) newErrors.password = "Password must be at least 8 characters.";
+            if (!/(?=.*[A-Z])(?=.*[0-9])/.test(form.password)) newErrors.password = "Password must contain at least one uppercase letter and one number.";
+            if (form.password !== form.confirmPassword) newErrors.confirmPassword = "Passwords do not match.";
             if (!form.phone.trim() || !/^[+0-9\s\-()]{7,}$/.test(form.phone)) newErrors.phone = "A valid phone number is required.";
             if (!form.country) newErrors.country = "Please select your country.";
             if (!form.city.trim()) newErrors.city = "City is required.";
@@ -104,8 +112,10 @@ export default function SignUpPage() {
         setServerError("");
 
         try {
-            // Check for duplicate email in Firestore
-            const q = query(collection(db, "practitioners"), where("email", "==", form.email.toLowerCase().trim()));
+            const emailLower = form.email.toLowerCase().trim();
+
+            // Check for duplicate email in practitioners
+            const q = query(collection(db, "practitioners"), where("email", "==", emailLower));
             const existing = await getDocs(q);
             if (!existing.empty) {
                 setServerError("An account with this email already exists. Please sign in instead.");
@@ -113,10 +123,13 @@ export default function SignUpPage() {
                 return;
             }
 
-            // Register the practitioner profile in Firestore
-            await addDoc(collection(db, "practitioners"), {
+            // Hash the password
+            const passwordHash = await bcrypt.hash(form.password, 12);
+
+            // Create practitioner profile
+            const practitionerRef = await addDoc(collection(db, "practitioners"), {
                 fullName: form.fullName.trim(),
-                email: form.email.toLowerCase().trim(),
+                email: emailLower,
                 phone: form.phone.trim(),
                 country: form.country,
                 city: form.city.trim(),
@@ -129,6 +142,15 @@ export default function SignUpPage() {
                 verified: false,
                 joinedAt: new Date().toISOString(),
                 status: "pending_review",
+            });
+
+            // Also create a user record in 'users' collection for Credentials auth
+            await setDoc(doc(db, "users", practitionerRef.id), {
+                name: form.fullName.trim(),
+                email: emailLower,
+                passwordHash,
+                image: null,
+                createdAt: new Date().toISOString(),
             });
 
             setSubmitted(true);
@@ -243,6 +265,24 @@ export default function SignUpPage() {
                                     <label className={labelClass}>Professional Email</label>
                                     <input name="email" type="email" value={form.email} onChange={handleChange} placeholder="doctor@hospital.org" className={inputClass("email")} />
                                     {errors.email && <p className="text-red-400 text-xs mt-1.5 ml-1 font-bold">{errors.email}</p>}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className={labelClass}>Password</label>
+                                        <div className="relative">
+                                            <input name="password" type={showPassword ? "text" : "password"} value={form.password} onChange={handleChange} placeholder="Min 8 chars, 1 uppercase, 1 number" className={inputClass("password") + " pr-12"} />
+                                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-amber-400 transition-colors">{showPassword ? <FiEyeOff size={16}/> : <FiEye size={16}/>}</button>
+                                        </div>
+                                        {errors.password && <p className="text-red-400 text-xs mt-1.5 ml-1 font-bold">{errors.password}</p>}
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Confirm Password</label>
+                                        <div className="relative">
+                                            <input name="confirmPassword" type={showConfirmPassword ? "text" : "password"} value={form.confirmPassword} onChange={handleChange} placeholder="Re-enter password" className={inputClass("confirmPassword") + " pr-12"} />
+                                            <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-amber-400 transition-colors">{showConfirmPassword ? <FiEyeOff size={16}/> : <FiEye size={16}/>}</button>
+                                        </div>
+                                        {errors.confirmPassword && <p className="text-red-400 text-xs mt-1.5 ml-1 font-bold">{errors.confirmPassword}</p>}
+                                    </div>
                                 </div>
                                 <div>
                                     <label className={labelClass}>Phone Number</label>

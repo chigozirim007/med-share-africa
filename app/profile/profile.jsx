@@ -4,7 +4,8 @@ import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
 import { db } from '@/config/firebase';
 import { doc, updateDoc, collection, query, where, getDocs, deleteDoc } from "firebase/firestore";
-import { FiLoader, FiLogOut, FiCheck, FiUser, FiEdit3, FiTrash2 } from "react-icons/fi";
+import { FiLoader, FiLogOut, FiCheck, FiUser, FiEdit3, FiTrash2, FiUpload, FiBookOpen, FiAward, FiShield, FiHeart, FiBookmark, FiMessageSquare } from "react-icons/fi";
+import ConfirmModal from "@/components/ConfirmModal";
 
 export default function ProfileClient({ session: initialSession }) {
     const { update } = useSession();
@@ -14,25 +15,36 @@ export default function ProfileClient({ session: initialSession }) {
     const [error, setError] = useState("");
 
     const [userTips, setUserTips] = useState([]);
+    const [savedTips, setSavedTips] = useState([]);
     const [loadingTips, setLoadingTips] = useState(true);
+    const [activeTab, setActiveTab] = useState("published"); // "published" | "saved"
+
+    const [modalOpen, setModalOpen] = useState(false);
+    const [pendingDeleteId, setPendingDeleteId] = useState(null);
 
     const fetchUserTips = async () => {
         if (!initialSession?.user?.id) return;
         try {
             setLoadingTips(true);
-            const q = query(
-                collection(db, "health-tips"),
-                where("refId", "==", initialSession.user.id)
-            );
-            const querySnapshot = await getDocs(q);
-            const tips = [];
-            querySnapshot.forEach((doc) => {
-                tips.push({
-                    postId: doc.id,
-                    ...doc.data()
-                });
+            const userId = initialSession.user.id;
+
+            // Fetch published tips
+            const q = query(collection(db, "health-tips"), where("refId", "==", userId));
+            const snap = await getDocs(q);
+            const published = [];
+            snap.forEach(d => published.push({ postId: d.id, ...d.data() }));
+            setUserTips(published);
+
+            // Fetch bookmarked/saved tips
+            const allSnap = await getDocs(collection(db, "health-tips"));
+            const saved = [];
+            allSnap.forEach(d => {
+                const data = d.data();
+                if ((data.bookmarks || []).includes(userId)) {
+                    saved.push({ postId: d.id, ...data });
+                }
             });
-            setUserTips(tips);
+            setSavedTips(saved);
         } catch (err) {
             console.error("Error fetching user health tips:", err);
         } finally {
@@ -40,221 +52,252 @@ export default function ProfileClient({ session: initialSession }) {
         }
     };
 
-    useEffect(() => {
-        fetchUserTips();
-    }, [initialSession]);
+    useEffect(() => { fetchUserTips(); }, [initialSession]);
 
     const handleSave = async (e) => {
         e.preventDefault();
-        if (!name.trim()) {
-            setError("Identification cannot be empty.");
-            return;
-        }
-
-        setSaving(true);
-        setError("");
-        setSuccess(false);
-
+        if (!name.trim()) { setError("Name cannot be empty."); return; }
+        setSaving(true); setError(""); setSuccess(false);
         try {
             if (initialSession?.user?.id) {
-                const userRef = doc(db, "users", initialSession.user.id);
-                await updateDoc(userRef, { name: name.trim() });
+                await updateDoc(doc(db, "users", initialSession.user.id), { name: name.trim() });
             }
-            if (update) {
-                await update({ name: name.trim() });
-            }
+            if (update) await update({ name: name.trim() });
             setSuccess(true);
-            setTimeout(() => setSuccess(false), 3000);
+            setTimeout(() => setSuccess(false), 3500);
         } catch (err) {
-            console.error("Error updating profile name:", err);
-            setError("Secure update failed. Please retry.");
+            setError("Update failed. Please retry.");
         } finally {
             setSaving(false);
         }
     };
 
-    const handleDeleteTip = async (id) => {
+    const requestDelete = (id) => { setPendingDeleteId(id); setModalOpen(true); };
+
+    const handleDeleteTip = async () => {
+        if (!pendingDeleteId) return;
         try {
-            if (confirm("Verify deletion of this clinical record?")) {
-                await deleteDoc(doc(db, "health-tips", id));
-                setUserTips(prev => prev.filter(tip => tip.postId !== id));
-            }
+            await deleteDoc(doc(db, "health-tips", pendingDeleteId));
+            setUserTips(prev => prev.filter(tip => tip.postId !== pendingDeleteId));
         } catch (err) {
             console.error("Error deleting tip:", err);
-            alert("Deletion protocol failed.");
+        } finally {
+            setModalOpen(false);
+            setPendingDeleteId(null);
         }
     };
 
+    const stats = [
+        { label: "Published", value: userTips.length, icon: FiBookOpen },
+        { label: "Saved", value: savedTips.length, icon: FiBookmark },
+        { label: "Rank", value: userTips.length >= 10 ? "Senior" : userTips.length >= 5 ? "Fellow" : "Member", icon: FiAward },
+    ];
+
+    const displayTips = activeTab === "published" ? userTips : savedTips;
+
     return (
         <main className="min-h-dvh bg-[#050505] py-24 px-6 text-slate-100 relative">
-            {/* Background ambient glow */}
-            <div className="absolute top-0 left-0 w-[400px] h-[400px] bg-emerald-900/10 rounded-full blur-[100px] pointer-events-none" />
+            <ConfirmModal
+                isOpen={modalOpen}
+                onConfirm={handleDeleteTip}
+                onCancel={() => { setModalOpen(false); setPendingDeleteId(null); }}
+                title="Revoke Clinical Record"
+                message="You are about to permanently remove this record from the Med-Share Africa network. All associated data will be irretrievably purged."
+                confirmLabel="Revoke Record"
+            />
 
-            <div className="max-w-6xl mx-auto flex flex-col items-center gap-16 relative z-10">
-                
-                {/* Profile Card */}
-                <div className="w-full max-w-lg glass-panel bg-[#0A0A0A]/80 rounded-[2.5rem] shadow-2xl border border-amber-500/20 overflow-hidden">
-                    
-                    {/* Visual Header */}
-                    <div className="h-40 w-full relative flex items-center justify-center bg-gradient-to-br from-emerald-900/80 to-[#0A0A0A] border-b border-amber-500/20">
-                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-                        <h2 className="text-amber-400 text-sm font-black tracking-[0.2em] uppercase z-10">Clinical Profile</h2>
+            <div className="absolute top-0 left-0 w-[400px] h-[400px] bg-emerald-900/10 rounded-full blur-[100px] pointer-events-none" />
+            <div className="absolute bottom-0 right-0 w-[300px] h-[300px] bg-amber-900/5 rounded-full blur-[100px] pointer-events-none" />
+
+            <div className="max-w-6xl mx-auto flex flex-col items-center gap-14 relative z-10">
+
+                {/* ===================== PROFILE CARD ===================== */}
+                <div className="w-full max-w-2xl">
+                    {/* Banner */}
+                    <div className="h-44 w-full rounded-t-[2.5rem] relative overflow-hidden bg-gradient-to-br from-emerald-900 via-[#0A3020] to-[#0A0A0A]">
+                        <div className="absolute inset-0 opacity-20"
+                            style={{ backgroundImage: `radial-gradient(circle at 1px 1px, rgba(212,175,55,0.3) 1px, transparent 0)`, backgroundSize: '28px 28px' }} />
+                        <div className="absolute bottom-4 right-6 text-[10px] text-amber-500/50 font-bold uppercase tracking-[0.3em]">Med-Share Africa</div>
                     </div>
 
-                    {/* Profile Form / Content */}
-                    <div className="px-8 pb-12 pt-0 flex flex-col items-center -mt-16 relative z-20">
-                        {/* User Avatar Circle */}
-                        <div className="relative group mb-6">
-                            <div className="w-32 h-32 rounded-full overflow-hidden border border-amber-500/50 shadow-[0_0_20px_rgba(212,175,55,0.2)] bg-[#050505] flex items-center justify-center transition-all duration-300 group-hover:scale-105">
-                                {initialSession?.user?.image ? (
-                                    <img
-                                        src={initialSession.user.image}
-                                        alt={name}
-                                        className="w-full h-full object-cover"
-                                        referrerPolicy="no-referrer"
-                                    />
-                                ) : (
-                                    <FiUser className="w-14 h-14 text-emerald-500" />
-                                )}
+                    <div className="glass-panel bg-[#0A0A0A]/90 rounded-b-[2.5rem] border border-t-0 border-amber-500/15 px-8 pb-10 shadow-2xl">
+                        <div className="flex items-end justify-between -mt-14 mb-6">
+                            <div className="relative">
+                                <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-[#0A0A0A] shadow-[0_0_30px_rgba(212,175,55,0.2)] bg-[#050505] flex items-center justify-center">
+                                    {initialSession?.user?.image ? (
+                                        <img src={initialSession.user.image} alt={name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                    ) : (
+                                        <FiUser className="w-12 h-12 text-emerald-500" />
+                                    )}
+                                </div>
+                                <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-emerald-500 border-2 border-[#0A0A0A] flex items-center justify-center">
+                                    <FiCheck className="text-[#050505] text-xs font-black" />
+                                </div>
+                            </div>
+                            <div className="flex gap-3 mb-2">
+                                <Link href="/upload" className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-black uppercase tracking-wider hover:bg-amber-500/20 transition-all">
+                                    <FiUpload size={12} /> Publish
+                                </Link>
+                                <Link href="/tips" className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-black uppercase tracking-wider hover:bg-emerald-500/20 transition-all">
+                                    <FiBookOpen size={12} /> Journal
+                                </Link>
                             </div>
                         </div>
 
-                        {/* Email display */}
-                        <div className="flex items-center gap-2 mb-8">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                            <p className="text-slate-400 text-sm font-bold tracking-widest uppercase">
-                                {initialSession?.user?.email}
-                            </p>
+                        <h2 className="text-2xl font-black text-slate-100 font-[family-name:var(--font-playfair)] mb-1">{name || "Specialist"}</h2>
+                        <div className="flex items-center gap-2 mb-6">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <p className="text-slate-500 text-sm font-medium">{initialSession?.user?.email}</p>
                         </div>
 
-                        <form onSubmit={handleSave} className="w-full flex flex-col gap-6">
-                            {/* Name Input Field */}
-                            <div className="flex flex-col gap-2">
-                                <label className="text-xs font-bold uppercase tracking-widest text-emerald-500 ml-1 flex items-center gap-1.5">
-                                    <FiEdit3 className="text-sm" /> Authorized Name
+                        {/* Stats */}
+                        <div className="grid grid-cols-3 gap-4 mb-8 p-4 rounded-2xl bg-white/3 border border-white/5">
+                            {stats.map((stat, i) => {
+                                const Icon = stat.icon;
+                                return (
+                                    <div key={i} className="text-center cursor-pointer" onClick={() => { if (stat.label === "Saved") setActiveTab("saved"); else if (stat.label === "Published") setActiveTab("published"); }}>
+                                        <Icon className="mx-auto mb-1.5 text-emerald-500" size={16} />
+                                        <p className="text-xl font-black text-slate-100">{stat.value}</p>
+                                        <p className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">{stat.label}</p>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Edit name form */}
+                        <form onSubmit={handleSave} className="flex flex-col gap-4">
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-widest text-emerald-500 mb-2 flex items-center gap-1.5">
+                                    <FiEdit3 size={11} /> Display Name
                                 </label>
                                 <input
                                     type="text"
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
-                                    placeholder="Enter authorization name"
-                                    className="w-full px-5 py-4 rounded-2xl border border-white/10 transition-all focus:outline-none focus:border-amber-500 focus:bg-white/10 bg-[#050505] text-slate-100 placeholder-slate-600 font-bold"
+                                    placeholder="Your authorised display name"
+                                    className="w-full px-5 py-4 rounded-2xl border border-white/10 focus:outline-none focus:border-amber-500 focus:bg-white/5 bg-[#050505] text-slate-100 placeholder-slate-600 font-bold transition-all"
                                 />
                             </div>
-
-                            {/* Success / Error Messages */}
                             {success && (
-                                <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-2xl text-sm font-bold">
-                                    <FiCheck className="text-lg shrink-0" />
-                                    <span>Profile security updated.</span>
+                                <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 p-3.5 rounded-xl text-sm font-bold">
+                                    <FiCheck size={16} className="shrink-0" /> Profile updated.
                                 </div>
                             )}
-                            {error && (
-                                <div className="text-red-400 bg-red-500/10 border border-red-500/30 p-4 rounded-2xl text-xs font-bold">
-                                    {error}
-                                </div>
-                            )}
-
-                            {/* Action Buttons */}
-                            <div className="flex flex-col gap-3 mt-4">
-                                <button
-                                    type="submit"
-                                    disabled={saving}
-                                    className="w-full flex items-center justify-center gap-3 py-4 px-10 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(5,150,105,0.3)]"
-                                >
-                                    {saving ? <FiLoader className="text-2xl animate-spin" /> : "Update Record"}
+                            {error && <div className="text-red-400 bg-red-500/10 border border-red-500/20 p-3.5 rounded-xl text-xs font-bold">{error}</div>}
+                            <div className="flex gap-3 pt-2">
+                                <button type="submit" disabled={saving} className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(5,150,105,0.3)] disabled:opacity-60">
+                                    {saving ? <FiLoader className="text-xl animate-spin" /> : <><FiCheck size={14} /> Save Changes</>}
                                 </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => signOut()}
-                                    className="w-full flex items-center justify-center gap-3 py-4 px-10 rounded-full border border-red-500/30 text-red-400 hover:bg-red-500/10 font-bold text-sm uppercase tracking-wider transition-all"
-                                >
-                                    <FiLogOut className="text-lg" />
-                                    <span>Terminate Session</span>
+                                <button type="button" onClick={() => signOut()} className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-full border border-red-500/30 text-red-400 hover:bg-red-500/10 font-bold text-sm uppercase tracking-wider transition-all" title="Sign Out">
+                                    <FiLogOut size={14} />
+                                    <span className="hidden sm:inline">Sign Out</span>
                                 </button>
                             </div>
                         </form>
                     </div>
                 </div>
 
-                {/* User's Created Tips Portfolio Grid */}
-                <div className="w-full border-t border-white/10 pt-16">
-                    <div className="text-center mb-12">
-                        <h3 className="text-3xl font-black mb-3 text-slate-100 font-[family-name:var(--font-playfair)]">
-                            My Published <span className="text-amber-400">Intelligence</span>
-                        </h3>
-                        <p className="text-slate-400 font-light max-w-xl mx-auto">
-                            The clinical records and medical insights you have authorized on the Med-Share Africa network.
-                        </p>
+                {/* ===================== TABS + RECORDS ===================== */}
+                <div className="w-full border-t border-white/10 pt-12">
+                    {/* Tab Header */}
+                    <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
+                        <div className="flex gap-1 p-1 rounded-full bg-white/5 border border-white/10">
+                            {[
+                                { key: "published", label: "Published", count: userTips.length, icon: FiBookOpen },
+                                { key: "saved", label: "Saved", count: savedTips.length, icon: FiBookmark },
+                            ].map(tab => (
+                                <button
+                                    key={tab.key}
+                                    onClick={() => setActiveTab(tab.key)}
+                                    className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-black uppercase tracking-wider transition-all ${
+                                        activeTab === tab.key
+                                            ? "bg-emerald-500 text-[#050505] shadow-[0_0_10px_rgba(5,150,105,0.4)]"
+                                            : "text-slate-400 hover:text-amber-400"
+                                    }`}
+                                >
+                                    <tab.icon size={13} />
+                                    {tab.label}
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${activeTab === tab.key ? "bg-[#050505]/30 text-[#050505]" : "bg-white/10 text-slate-500"}`}>
+                                        {tab.count}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+
+                        {activeTab === "published" && (
+                            <Link href="/upload" className="hidden sm:flex items-center gap-2 px-6 py-3 rounded-full bg-amber-500 text-[#050505] font-black text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(212,175,55,0.3)] hover:scale-105 transition-transform">
+                                <FiUpload size={12} /> New Record
+                            </Link>
+                        )}
                     </div>
 
                     {loadingTips ? (
                         <div className="flex justify-center items-center py-16">
                             <FiLoader className="text-4xl animate-spin text-emerald-500" />
                         </div>
-                    ) : userTips.length > 0 ? (
+                    ) : displayTips.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                            {userTips.map((tip) => (
-                                <article
-                                    key={tip.postId}
-                                    className="glass-panel bg-[#0A0A0A]/60 rounded-[2rem] border border-amber-500/10 hover:border-amber-500/30 transition-all flex flex-col group relative"
-                                >
-                                    <div className="p-8 flex flex-col h-full">
-                                        {/* Delete Button */}
-                                        <button
-                                            onClick={() => handleDeleteTip(tip.postId)}
-                                            className="absolute top-6 right-6 p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-full transition-colors"
-                                            title="Revoke Record"
-                                        >
-                                            <FiTrash2 size={18} />
-                                        </button>
-
-                                        {/* Category & Date */}
-                                        <div className="flex items-center gap-3 mb-5">
-                                            <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full text-[#050505] bg-emerald-500">
-                                                {tip.cat}
-                                            </span>
-                                            <span className="text-xs text-slate-500 font-medium">{tip.timestamp}</span>
+                            {displayTips.map((tip) => (
+                                <article key={tip.postId} className="glass-panel bg-[#0A0A0A]/60 rounded-[2rem] border border-white/5 hover:border-amber-500/20 transition-all flex flex-col group">
+                                    <div className="p-7 flex flex-col h-full">
+                                        <div className="flex items-center justify-between mb-5">
+                                            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                                <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md text-[#050505] bg-emerald-500 whitespace-nowrap">{tip.cat}</span>
+                                                <span className="text-xs text-slate-600 font-medium truncate">{tip.timestamp}</span>
+                                            </div>
+                                            {activeTab === "published" && (
+                                                <button onClick={() => requestDelete(tip.postId)} className="ml-2 p-1.5 shrink-0 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all" title="Revoke">
+                                                    <FiTrash2 size={14} />
+                                                </button>
+                                            )}
                                         </div>
 
-                                        {/* Title */}
-                                        <h4 className="text-xl font-bold mb-3 leading-tight text-slate-200">
-                                            {tip.tip}
-                                        </h4>
+                                        <Link href={`/tips/${tip.postId}`}>
+                                            <h4 className="text-lg font-bold mb-2 leading-tight text-slate-200 group-hover:text-amber-400 transition-colors cursor-pointer">{tip.tip}</h4>
+                                        </Link>
+                                        <p className="text-slate-500 line-clamp-3 leading-relaxed font-light text-sm flex-1 mb-4">{tip.desc}</p>
 
-                                        {/* Description */}
-                                        <p className="text-slate-400 line-clamp-3 leading-relaxed mb-6 font-light">
-                                            {tip.desc}
-                                        </p>
-
-                                        {/* Footer */}
-                                        <div className="mt-auto pt-6 border-t border-white/5 flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
+                                        <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+                                            <div className="flex items-center gap-2.5">
                                                 {tip.authorImg ? (
-                                                    <img src={tip.authorImg} alt={tip.author} className="w-8 h-8 rounded-full object-cover grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all border border-amber-500/30" />
+                                                    <img src={tip.authorImg} alt={tip.author} className="w-7 h-7 rounded-full object-cover border border-amber-500/30 grayscale group-hover:grayscale-0 transition-all" />
                                                 ) : (
-                                                    <div className="w-8 h-8 rounded-full bg-emerald-900/50 flex items-center justify-center border border-emerald-500/30"><FiUser className="text-emerald-500 text-xs" /></div>
+                                                    <div className="w-7 h-7 rounded-full bg-emerald-900/50 flex items-center justify-center border border-emerald-500/30">
+                                                        <FiUser className="text-emerald-500 text-[10px]" />
+                                                    </div>
                                                 )}
-                                                <p className="text-xs font-bold text-slate-300">{tip.author}</p>
+                                                <p className="text-xs font-bold text-slate-400">{tip.author}</p>
                                             </div>
-                                            <span className="w-2 h-2 rounded-full bg-emerald-500/50" />
+                                            <div className="flex items-center gap-3 text-xs text-slate-600">
+                                                {(tip.likes || []).length > 0 && <span className="flex items-center gap-1"><FiHeart size={11} /> {(tip.likes || []).length}</span>}
+                                                {(tip.bookmarks || []).length > 0 && <span className="flex items-center gap-1"><FiBookmark size={11} /> {(tip.bookmarks || []).length}</span>}
+                                            </div>
                                         </div>
                                     </div>
                                 </article>
                             ))}
                         </div>
                     ) : (
-                        <div className="glass-panel bg-[#0A0A0A]/50 rounded-[2rem] p-12 border border-white/10 text-center max-w-md mx-auto">
-                            <p className="text-slate-400 font-light mb-6">
-                                No clinical records found in your directory.
-                            </p>
-                            <Link
-                                href="/upload"
-                                className="inline-block py-3 px-8 rounded-full bg-amber-500 text-[#050505] font-black text-sm uppercase tracking-wider shadow-[0_0_15px_rgba(212,175,55,0.3)] hover:scale-105 transition-transform"
-                            >
-                                Publish First Record
-                            </Link>
+                        <div className="glass-panel bg-[#0A0A0A]/50 rounded-[2rem] p-16 border border-white/5 text-center max-w-lg mx-auto">
+                            {activeTab === "published" ? (
+                                <>
+                                    <FiBookOpen className="mx-auto text-4xl text-slate-600 mb-5" />
+                                    <h4 className="text-xl font-black text-slate-300 mb-3 font-[family-name:var(--font-playfair)]">No Records Yet</h4>
+                                    <p className="text-slate-500 font-light mb-8 text-sm">Share your clinical expertise with the network.</p>
+                                    <Link href="/upload" className="inline-flex items-center gap-2 py-3.5 px-8 rounded-full bg-amber-500 text-[#050505] font-black text-sm uppercase tracking-wider shadow-[0_0_15px_rgba(212,175,55,0.3)] hover:scale-105 transition-transform">
+                                        <FiUpload size={14} /> Publish First Record
+                                    </Link>
+                                </>
+                            ) : (
+                                <>
+                                    <FiBookmark className="mx-auto text-4xl text-slate-600 mb-5" />
+                                    <h4 className="text-xl font-black text-slate-300 mb-3 font-[family-name:var(--font-playfair)]">No Saved Records</h4>
+                                    <p className="text-slate-500 font-light mb-8 text-sm">Bookmark clinical records from the journal to access them here.</p>
+                                    <Link href="/tips" className="inline-flex items-center gap-2 py-3.5 px-8 rounded-full bg-emerald-600 text-white font-black text-sm uppercase tracking-wider hover:bg-emerald-500 transition-all">
+                                        <FiBookOpen size={14} /> Browse Journal
+                                    </Link>
+                                </>
+                            )}
                         </div>
                     )}
                 </div>
