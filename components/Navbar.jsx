@@ -50,8 +50,8 @@ export default function Navbar() {
                 <div className="flex items-center justify-between">
                     {/* Logo */}
                     <Link href={"/"} className="flex items-center gap-3 z-50 group">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-amber-500/30 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors shadow-[0_0_15px_rgba(212,175,55,0.1)]">
-                            <span className="text-amber-400 font-black text-xl font-[family-name:var(--font-playfair)]">M</span>
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-amber-500/30 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors shadow-[0_0_15px_rgba(212,175,55,0.1)] overflow-hidden">
+                            <img src="/favicon.ico" alt="Med-Share Logo" className="w-full h-full object-cover" />
                         </div>
                         <span className="flex flex-col justify-center">
                             <p className="font-bold text-slate-100 tracking-wide text-sm leading-tight">MED-SHARE</p>
